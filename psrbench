@@ -1,0 +1,530 @@
+#!/usr/bin/env python3
+######################## ALESSANDRO RIDOLFI ########################
+
+import sys
+import os
+import os.path
+import glob
+import subprocess
+import multiprocessing
+import shlex
+import shutil
+import copy
+import random
+import time
+import datetime
+import numpy as np
+import urllib
+import pylab as plt
+
+try:
+        from presto import filterbank, infodata, parfile, psr_utils, psrfits, rfifind, sifting
+except:
+        print("\nERROR: Could not not load the PRESTO python modules!")
+        print("Please make sure that your PRESTO python modules are actually installed and working.\n")
+        exit()
+
+        
+
+import warnings
+from multiprocessing.pool import ThreadPool
+
+warnings.simplefilter('ignore', UserWarning)
+
+string_version_full = "0.1 (23Nov2023)"
+string_version = "23Nov2023"
+number_version = 20231123
+
+class colors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    ERROR = '\033[91m'
+    BOLD = '\033[1m'
+    ENDCOLOR = '\033[0m'
+
+
+def check_presto_path(presto_path, key):
+        if os.path.exists(presto_path):
+                if os.path.exists(presto_path+"/bin/accelsearch"):
+                        return True
+                else:
+                        print("%sERROR%s: %s directory '%s' exists but I could not find 'accelsearch' in %s/bin!" % (colors.ERROR+colors.BOLD, colors.ENDCOLOR, key, presto_path, presto_path))
+                        print("Please make sure that your %s installation is actually there and working." % (key))
+                        exit()
+                
+        else:
+                print("%sERROR:%s %s directory '%s' does not exist!" % (colors.ERROR+colors.BOLD, colors.ENDCOLOR, key, presto_path))
+                print("Please make sure that the path of %s in your configuration file is correct." % (key))
+                exit()
+                
+
+
+
+class Inffile(object):
+        def __init__(self, inffilename):
+                inffile = open(inffilename, "r")
+                for line in inffile:
+                        if "Data file name without suffix" in line:
+                                self.datafilebasename = line.split("=")[-1].strip()
+                        elif "Telescope used" in line:
+                                self.telescope = line.split("=")[-1].strip()
+                        elif "Instrument used" in line:
+                                self.instrument = line.split("=")[-1].strip()
+                        elif "Object being observed" in line:
+                                self.source = line.split("=")[-1].strip()
+                        elif "J2000 Right Ascension" in line:
+                                self.RAJ = line.split("=")[-1].strip()
+                        elif "J2000 Declination" in line:
+                                self.DECJ = line.split("=")[-1].strip()
+                        elif "Data observed by" in line:
+                                self.observer = line.split("=")[-1].strip()
+                        elif "Epoch of observation" in line:
+                                self.start_MJD = np.float128(line.split("=")[-1].strip())
+                        elif "Barycentered?" in line:
+                                self.barycentered = int(line.split("=")[-1].strip())
+                        elif "Number of bins in the time series" in line:
+                                self.nsamples = int(line.split("=")[-1].strip())
+                        elif "Width of each time series bin" in line:
+                                self.tsamp_s = np.float128(line.split("=")[-1].strip())
+                        elif "Any breaks in the data?" in line:
+                                self.breaks_in_data = int(line.split("=")[-1].strip())
+                        elif "Type of observation" in line:
+                                self.obstype = line.split("=")[-1].strip()
+                        elif "Beam diameter" in line:
+                                self.beamdiameter = np.float128(line.split("=")[-1].strip())
+                        elif "Dispersion measure" in line:
+                                self.DM = np.float128(line.split("=")[-1].strip())
+                        elif "Central freq of low channel" in line:
+                                self.freq_ch1 = np.float128(line.split("=")[-1].strip())
+                        elif "Total bandwidth" in line:
+                                self.bw = np.float128(line.split("=")[-1].strip())
+                        elif "Number of channels" in line:
+                                self.nchan = int(line.split("=")[-1].strip())
+                        elif "Channel bandwidth" in line:
+                                self.bw_chan = np.float128(line.split("=")[-1].strip())
+                        elif "Data analyzed by" in line:
+                                self.analyzer = line.split("=")[-1].strip()
+                inffile.close()
+
+
+
+def execute_and_log_in_thread_pool(command, log_dir, work_dir, id_num, N_ids, flag_log=1):
+       datetime_start = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
+       datetime_start_single_string = (datetime.datetime.now()).strftime("%Y%m%d_%H%M")
+       time_start = time.time()
+       if "/" in command.split()[0]:
+              command_label = command.split("/")[-1].split()[0]
+       else:
+              command_label = command.split()[0]
+       list_for_Popen = command.split()
+
+       for i in range(len(list_for_Popen)):
+              current_piece = list_for_Popen[i]
+
+              if "?" in current_piece or "*" in current_piece:
+                     new_list_for_Popen = list_for_Popen[:i] + sorted(glob.glob(current_piece)) + list_for_Popen[i+1:]
+                     list_for_Popen = new_list_for_Popen
+
+       if flag_log == 1:
+               log_filename = "LOG_%s_%s_%03d.txt" % (command_label, datetime_start_single_string, int(id_num))
+               log_abspath = os.path.join(log_dir, log_filename)
+               log_file = open(log_abspath, "w+")
+               log_file.write("****************************************************************\n")
+               log_file.write("START DATE AND TIME: %s\n" % (datetime_start))
+               log_file.write("\nCOMMAND:\n")
+               log_file.write("%s\n\n" % (command))
+               log_file.write("WORKING DIRECTORY: %s\n" % (work_dir))
+               log_file.write("****************************************************************\n")
+               log_file.flush()
+               proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=log_file, stderr=log_file)
+       elif flag_log == 0:
+               print("Not logging..")
+               proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=subprocess.PIPE)
+       proc.communicate()
+
+       datetime_end = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
+       time_end = time.time()
+
+       log_file.write("\nEND DATE AND TIME: %s\n" % (datetime_end))
+       log_file.write("\nTOTAL TIME TAKEN: %d s\n" % (time_end - time_start))
+       log_file.close()
+       print("Command %4d/%d complete. " % (id_num+1, N_ids)); sys.stdout.flush()
+
+
+def execute_and_log(command, work_dir, log_abspath, dict_envs={}, flag_append=0, verbosity_level=0):
+        datetime_start = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
+        time_start = time.time()
+        if flag_append == 1:
+                flag_open_mode = "a"
+        else:
+                flag_open_mode = "w+"
+        log_file = open("%s" % (log_abspath), flag_open_mode)
+        executable = command.split()[0]
+
+        log_file.write("****************************************************************\n")
+        log_file.write("START DATE AND TIME: %s\n" % (datetime_start))
+        log_file.write("\nCOMMAND:\n")
+        log_file.write("%s\n\n" % (command))
+        log_file.write("WORKING DIRECTORY: %s\n" % (work_dir))
+        log_file.write("****************************************************************\n")
+        log_file.flush()
+
+        list_for_Popen = command.split()
+        env_subprocess = os.environ.copy()
+        if dict_envs:  # If the dictionary is not empty                                                                                                                                                            
+                for k in list(dict_envs.keys()):
+                        env_subprocess[k] = dict_envs[k]
+
+        proc = subprocess.Popen(list_for_Popen, stdout=log_file, stderr=log_file, cwd=work_dir, env=env_subprocess)
+        proc.communicate()  # Wait for the process to complete                                                                                                                                                    
+
+        datetime_end = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
+        time_end = time.time()
+
+        if verbosity_level >= 1:
+                print("execute_and_log:: COMMAND: %s" % (command))
+                print("execute_and_log:: which %s: " % (executable), get_command_output("which %s" % (executable)))
+                print("execute_and_log:: WORKING DIRECTORY = ", work_dir)
+                print("execute_and_log:: CHECK LOG WITH: \"tail -f %s\"" % (log_abspath))
+                sys.stdout.flush()
+                print("execute_and_log: list_for_Popen = ", list_for_Popen)
+                print("execute_and_log: log_file        = ", log_file)
+                print("execute_and_log: env_subprocess = ", env_subprocess)
+
+        log_file.write("\nEND DATE AND TIME: %s\n" % (datetime_end))
+        log_file.write("\nTOTAL TIME TAKEN: %d s\n" % (time_end - time_start))
+        log_file.close()
+
+
+
+
+def get_command_output(command, shell_state=False, work_dir=os.getcwd()):
+        list_for_Popen = command.split()
+        if shell_state ==False:
+                proc = subprocess.Popen(list_for_Popen, stdout=subprocess.PIPE, shell=shell_state, cwd=work_dir)
+        else:
+                proc = subprocess.Popen([command], stdout=subprocess.PIPE, shell=shell_state, cwd=work_dir)
+        out, err = proc.communicate()
+
+        return out.decode('ascii')
+
+
+def get_command_output_with_pipe(command1, command2):
+        list_for_Popen_cmd1 = command1.split()
+        list_for_Popen_cmd2 = command2.split()
+
+        p1 = subprocess.Popen(list_for_Popen_cmd1, stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(list_for_Popen_cmd2, stdin=p1.stdout, stdout=subprocess.PIPE)
+        p1.stdout.close()
+
+        out, err = p2.communicate()
+        return out.decode('ascii')
+
+
+
+def check_accelsearch_result(fft_infile, zmax, verbosity_level=0):
+        fft_infile_nameonly = os.path.basename(fft_infile)
+        fft_infile_basename = os.path.splitext(fft_infile_nameonly)[0]
+
+        if verbosity_level >= 2:
+                print("check_accelsearch_result:: infile_basename: ", fft_infile_basename)
+                print("check_accelsearch_result:: ACCEL_filename = ", ACCEL_filename)
+                print("check_accelsearch_result:: ACCEL_cand_filename", ACCEL_cand_filename)
+                print("check_accelsearch_result:: ACCEL_txtcand_filename = ", ACCEL_txtcand_filename)
+
+        ACCEL_filename =  fft_infile.replace(".fft", "_ACCEL_%d" % (zmax))
+        ACCEL_cand_filename =  fft_infile.replace(".fft", "_ACCEL_%d.cand" % (zmax))
+        ACCEL_txtcand_filename =  fft_infile.replace(".fft", "_ACCEL_%d.txtcand" % (zmax))
+
+        try:
+                if (os.path.getsize(ACCEL_filename) > 0) and (os.path.getsize(ACCEL_cand_filename) > 0) and (os.path.getsize(ACCEL_txtcand_filename) > 0):
+                        result_message = "check_accelsearch_result:: Files exist and their size is > 0! Skipping..."
+                        check_result = True
+                else:
+                        result_message = "check_accelsearch_result:: Files exists but at least one of them has size = 0!"
+                        check_result = False
+        except OSError:
+                result_message = "check_accelsearch_result:: OSError: It seems accelsearch has not been executed!"
+                check_result = False
+
+        if verbosity_level >= 1:
+                print(result_message)
+
+        return check_result
+
+
+def accelsearch(infile, work_dir, log_abspath, numharm=8, zmax=0, other_flags="", dict_env= {}, verbosity_level=0, flag_LOG_append=1):
+        infile_nameonly = os.path.basename(infile)
+        infile_basename = os.path.splitext(infile_nameonly)[0]
+        inffile_empty = infile.replace(".fft", "_ACCEL_%d_empty" % (zmax))
+
+        cmd_accelsearch = "accelsearch %s -zmax %s -numharm %s %s" % (other_flags, zmax, numharm, infile)
+
+        if verbosity_level >= 2:
+                print()
+                print("BEGIN ACCELSEARCH ----------------------------------------------------------------------")
+
+                print("accelsearch:: cmd_accelsearch: ", cmd_accelsearch)
+                print("accelsearch:: ENV: ", dict_env)
+                print("accelsearch:: check_accelsearch_result(infile, int(zmax)) :: %s" % (check_accelsearch_result(infile, int(zmax))))
+                print("accelsearch:: work_dir = %s" % (work_dir))
+                print("accelsearch:: infile = %s" % (infile))
+
+        tstart_accelsearch = time.time()
+        execute_and_log(cmd_accelsearch, work_dir, log_abspath, dict_env, flag_LOG_append)
+        tend_accelsearch = time.time()
+        time_taken_accelsearch_s = tend_accelsearch - tstart_accelsearch
+
+        if verbosity_level >= 2:
+                print("accelsearch:: NOW I CHECK THE RESULT OF THE EXECUTION!")
+
+        if check_accelsearch_result(infile, int(zmax)) == False:
+                if verbosity_level >= 2:
+                        print("False! Then I create a _empty file!")
+                file_empty = open(inffile_empty, "w")
+                if verbosity_level >=1:
+                        print("%sWARNING%s: accelsearch did not produce any candidates! Writing file %s to signal this..." % (colors.WARNING+colors.BOLD, colors.ENDCOLOR, inffile_empty), end='')
+                file_empty.write("ACCELSEARCH DID NOT PRODUCE ANY CANDIDATES!")
+        else:
+                if verbosity_level >= 2:
+                        print("accelsearch: GOOD! CANDIDATES HAVE BEEN PRODUCED for %s!" % (infile))
+                
+        if verbosity_level >= 2:
+                print("END ACCELSEARCH ---------------------------------------------------------------------- ")
+
+        if check_accelsearch_result(infile, int(zmax)) == False and check_accelsearch_result(inffile_empty, int(zmax)) == False:
+                return -1
+        else:
+                return time_taken_accelsearch_s
+
+
+
+def realfft(infile, out_dir, log_dir, LOG_basename, other_flags="", presto_env=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=0):
+        infile_nameonly = os.path.basename(infile)
+        infile_basename = os.path.splitext(infile_nameonly)[0]
+        inffile_original_abspath = infile.replace(".dat", ".inf")
+        log_abspath = "%s/LOG_%s.txt" % (log_dir, LOG_basename)
+        fftfile_abspath = os.path.join(out_dir, "%s.fft" % (infile_basename))
+        inffile_abspath = os.path.join(out_dir, "%s.inf" % (infile_basename))
+        
+        cmd_realfft = "realfft -outdir %s %s %s" % (out_dir, other_flags, infile)
+        if verbosity_level >= 2:
+                print("%s | realfft:: Running:" % (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M"))
+                sys.stdout.flush()
+                print("%s" % (cmd_realfft))
+                sys.stdout.flush()
+
+        if os.path.exists(fftfile_abspath ) and (os.path.getsize(fftfile_abspath) > 0):
+                if verbosity_level >= 1:
+                        print()
+                        print("WARNING: File %s already present. Skipping realfft..." % (fftfile_abspath), end=' ')
+        else:
+                dict_env = {'PRESTO': presto_env, 'PATH': "%s/bin:%s" % (presto_env, os.environ['PATH']), 'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_env, os.environ['LD_LIBRARY_PATH'])}
+                execute_and_log(cmd_realfft, out_dir, log_abspath, dict_env, 0)
+                #print("Checking %s..." % fftfile_abspath) 
+                if os.path.exists(fftfile_abspath ) and (os.stat(fftfile_abspath).st_size > 0):
+                        if verbosity_level >= 2:
+                                print("%s | realfft on \"%s\" completed successfully!" % (datetime.datetime.now().strftime("%Y/%m/%d  %H:%M"), infile_nameonly))
+                                sys.stdout.flush()
+                else:
+                        print("WARNING (%s) | could not find all the output files from realfft on \"%s\"!" % (datetime.datetime.now().strftime("%Y/%m/%d  %H:%M"), infile_nameonly))
+                        sys.stdout.flush()
+
+        if not os.path.exists(inffile_abspath):
+                print("Copying %s to %s" % (inffile_original_abspath, inffile_abspath))
+                shutil.copyfile(inffile_original_abspath, inffile_abspath)
+        
+        return fftfile_abspath
+
+
+###########################################################################################################################################################
+verbosity_level = 1
+data_filename = "NGC1851_06U_cfbf00001_CB_full_ck00_DM52.00.dat"
+dir_psrbench = os.path.abspath( os.path.dirname( __file__ ) )
+
+data_file_abspath = os.path.join(dir_psrbench, data_filename)
+
+list_zmax = [25,50,75,150,300,600,1200]
+
+flag_test_CPU = 0
+flag_test_GPU = 0
+
+gpu_device_name = ''
+
+work_dir = os.getcwd()
+
+dict_test_results = {}
+
+# SHELL ARGUMENTS
+if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--help" in sys.argv)):
+        print("USAGE1: %s -tests {accelsearch_CPU,accelsearch_GPU} [-zmax \"50,100,200,400\"]  [{-Q | -v | -V}]" % (os.path.basename(sys.argv[0])))
+        print()
+        print("%10s  %-32s:  %-50s" % ("-h", "", "Print help"))
+        print("%10s  %-32s:  %-50s" % ("-zmax", "", "Manually specify list of zmax values to test"))
+        print("%10s  %-32s:  %-50s" % ("-Q", "", "Quiet mode - do not print anything"))
+        print("%10s  %-32s:  %-50s" % ("-v", "", "Verbose mode - print more useful info about the processing"))
+        print("%10s  %-32s:  %-50s" % ("-V", "", "Very verbose mode - print everything to debug issues"))
+        print("%10s  %-32s:  %-50s" % ("-version", "", "Print code version"))
+
+        print()
+        print("NOTE: Make sure that the PRESTO and PRESTO2_ON_GPU are correctly set")
+        print()
+        exit()
+elif (("-version" in sys.argv) or ("--version" in sys.argv)):
+        print("PSRBENCH version: %s" % (string_version_full))
+        exit()
+else:
+        for j in range(1, len(sys.argv)):
+                if (sys.argv[j] == "-tests"):
+                        if "accelsearch_CPU" in sys.argv[j+1]:
+                                flag_test_CPU = 1
+                                print("CPU benchmark enabled")
+                        if "accelsearch_GPU" in sys.argv[j+1]:
+                                flag_test_GPU =	1
+                                print("GPU benchmark enabled")
+                elif (sys.argv[j] == "-zmax"):
+                        list_zmax = [int(x) for x in sys.argv[j+1].split(",")]
+                elif (sys.argv[j] == "-Q"):
+                        verbosity_level = 0
+                elif (sys.argv[j] == "-v"):
+                        verbosity_level = 2
+                elif (sys.argv[j] == "-V"):
+                        verbosity_level = 3
+
+try:
+        presto_path = os.environ['PRESTO']
+        dict_env_presto = {'PRESTO': presto_path,   'PATH': "%s/bin:%s" % (presto_path, os.environ['PATH']),   'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_path,  os.environ['LD_LIBRARY_PATH'])}
+except:
+        print("ERROR: PRESTO environment variable not set!")
+        exit()
+
+if flag_test_GPU == 1:
+        try:
+	        presto_gpu_path = os.environ['PRESTO2_ON_GPU']
+        except:
+                try:
+                        presto_gpu_path = os.environ['PRESTO_ON_GPU']
+                        print("WARNING: PRESTO2_ON_GPU environment variable not set, but found PRESTO_ON_GPU")
+                except:
+                        print("ERROR: PRESTO2_ON_GPU environment variable not set!")
+                        exit()
+
+        gpu_device_name = get_command_output("nvidia-smi --id=0 --query-gpu=name --format=csv,noheader").strip()
+        print("GPU model: %s" % (gpu_device_name))
+        dict_env_presto_gpu = {'PRESTO': presto_gpu_path,   'PATH': "%s/bin:%s" % (presto_gpu_path, os.environ['PATH']),   'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_gpu_path,  os.environ['LD_LIBRARY_PATH'])}
+        
+
+start_datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+if verbosity_level >= 1:
+        size_logo = 64
+        size_string_version = len(string_version_full)
+        dsize = int((size_logo - size_string_version)*0.5 - 1)
+        dsize_offset = size_string_version % 2
+
+        print()
+        print("#"*size_logo)
+        print("#" + " "*27 + "%s" % ("PSRBENCH") + " "*27 + "#")
+        print("#" + " "*(dsize + dsize_offset) + "%s" % (string_version_full) + " "*dsize + "#")
+        print("#"*size_logo)
+        print()
+        print("Command: %s" % (" ".join(sys.argv)))
+        print("Launch date_time: %s" % (start_datetime_str) )
+        print()
+        print()
+        if flag_test_GPU == 1:
+                print("GPU benchmark enabled  (PRESTO2_ON_GPU path: %s)" % (presto_gpu_path))
+        if flag_test_CPU == 1:
+                print("CPU benchmark enabled  (PRESTO         path: %s)" % (presto_path))
+
+        
+        print()
+        print("Data file: %s" % (data_file_abspath))
+
+if os.path.exists(data_file_abspath):
+        print("File is there! Good!")
+
+else:
+        print("ERROR! File %s not present!" % (data_file_abspath))
+        exit()
+
+print("Doing realfft  of %s... " % (data_file_abspath), end=''); sys.stdout.flush()
+fftfile_abspath = realfft(data_file_abspath, "/tmp", work_dir, "LOG_01_realfft.txt", other_flags="", presto_env=presto_path, verbosity_level=0, flag_LOG_append=0)
+print("...done!")
+print()
+print()
+
+
+array_times_GPU = np.zeros(len(list_zmax))
+array_times_CPU = np.zeros(len(list_zmax))
+
+
+##########################################################################################
+if flag_test_CPU == 1:
+        dict_test_results['CPU'] = 0
+        for k in range(len(list_zmax)):
+                zmax = list_zmax[k]
+                print("Doing accelsearch of %s with zmax = %4d on CPU (%s)..." % (fftfile_abspath, zmax, gpu_device_name),  end=''); sys.stdout.flush()
+                log_file_abspath = os.path.join(work_dir, "LOG_02_accelsearch_CPU_zmax_%d.txt" % (zmax))
+                time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, numharm=8, zmax=zmax, other_flags="-ncpus 10", dict_env=dict_env_presto, verbosity_level=0, flag_LOG_append=1)
+                print 
+                if time_taken_accelsearch_s == -1:
+                        print("FAILED! Check log in file '%s' for more details." % (log_file_abspath)) ; sys.stdout.flush()
+                elif time_taken_accelsearch_s > 0:
+                        print("done in %.2f s!" % (time_taken_accelsearch_s)); sys.stdout.flush()
+                        array_times_CPU[k] = time_taken_accelsearch_s
+        dict_test_results['CPU'] = array_times_CPU
+        
+        
+
+
+
+##########################################################################################
+print()
+print()
+if flag_test_GPU == 1:
+        dict_test_results['GPU'] = 0
+        for k in range(len(list_zmax)):
+                zmax = list_zmax[k]
+                print("Doing accelsearch of %s with zmax = %4d on GPU (%s)..." % (fftfile_abspath, zmax, gpu_device_name),  end=''); sys.stdout.flush()
+                log_file_abspath = os.path.join(work_dir, "LOG_02_accelsearch_GPU_zmax_%d.txt" % (zmax))
+                time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, numharm=8, zmax=zmax, other_flags="-cuda 0", dict_env=dict_env_presto_gpu, verbosity_level=0, flag_LOG_append=1)
+                print 
+                if time_taken_accelsearch_s == -1:
+                        print("FAILED! Check log in file '%s' for more details." % (log_file_abspath)) ; sys.stdout.flush()
+                elif time_taken_accelsearch_s > 0:
+                        print("done in %.2f s!" % (time_taken_accelsearch_s)); sys.stdout.flush()
+                        array_times_GPU[k] = time_taken_accelsearch_s
+        dict_test_results['GPU'] = array_times_GPU
+
+
+
+
+
+
+
+                        
+x = np.arange(len(list_zmax))  # the label locations
+width = 0.25  # the width of the bars
+multiplier = 0
+
+fig, ax = plt.subplots(layout='constrained')
+
+for test_name, measurements in dict_test_results.items():
+    offset = width * multiplier
+    rects = ax.bar(x + offset, measurements, width, label=test_name)
+    ax.bar_label(rects, padding=3)
+    multiplier += 1
+
+# Add some text for labels, title and custom x-axis tick labels, etc.
+ax.set_ylabel("Time taken (s)")
+ax.set_xlabel("Zmax")
+ax.set_title("Accelsearch on GPU (%s)" % (gpu_device_name))
+ax.set_xticks(x + width, list_zmax)
+ax.legend(loc='upper left')
+
+plt.show()
+plt.savefig("psrbench_histogram.png")
+
