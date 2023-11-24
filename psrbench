@@ -14,7 +14,7 @@ import random
 import time
 import datetime
 import numpy as np
-import urllib
+import urllib.request
 import pylab as plt
 
 try:
@@ -31,9 +31,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "0.1 (23Nov2023)"
-string_version = "23Nov2023"
-number_version = 20231123
+string_version_full = "0.1 (24Nov2023)"
+string_version = "24Nov2023"
+number_version = 20231124
 
 class colors:
     HEADER = '\033[95m'
@@ -342,10 +342,18 @@ def realfft(infile, out_dir, log_dir, LOG_basename, other_flags="", presto_env=o
 
 ###########################################################################################################################################################
 verbosity_level = 1
-data_filename = "NGC1851_06U_cfbf00001_CB_full_ck00_DM52.00.dat"
-dir_psrbench = os.path.abspath( os.path.dirname( __file__ ) )
 
-data_file_abspath = os.path.join(dir_psrbench, data_filename)
+server        = "http://pulsar.oa-cagliari.inaf.it"
+webloc        = "http://pulsar.oa-cagliari.inaf.it/pulsar_data"
+dat_filename  = "NGC1851_test_obs_2h.dat"
+inf_filename  = "NGC1851_test_obs_2h.inf"
+dir_psrbench  = os.path.abspath( os.path.dirname( __file__ ) )
+
+datfile_abspath = os.path.join(dir_psrbench, dat_filename)
+inffile_abspath = os.path.join(dir_psrbench, inf_filename)
+datfile_urlpath = os.path.join(webloc, dat_filename)
+inffile_urlpath = os.path.join(webloc, inf_filename)
+
 
 list_zmax = [25,50,75,150,300,600,1200]
 
@@ -441,17 +449,29 @@ if verbosity_level >= 1:
 
         
         print()
-        print("Data file: %s" % (data_file_abspath))
+        print("Data file: %s" % (datfile_abspath))
 
-if os.path.exists(data_file_abspath):
-        print("File is there! Good!")
-
+print()
+if os.path.exists(datfile_abspath):
+        print("%s is there! Good!" % (datfile_abspath)) 
 else:
-        print("ERROR! File %s not present!" % (data_file_abspath))
-        exit()
+        print("File %s not found. Downloading it from %s..." % (dat_filename, server), end=''); sys.stdout.flush()
+        urllib.request.urlretrieve( datfile_urlpath, datfile_abspath )
+        print("done!"); sys.stdout.flush()
 
-print("Doing realfft  of %s... " % (data_file_abspath), end=''); sys.stdout.flush()
-fftfile_abspath = realfft(data_file_abspath, "/tmp", work_dir, "LOG_01_realfft.txt", other_flags="", presto_env=presto_path, verbosity_level=0, flag_LOG_append=0)
+
+if os.path.exists(inffile_abspath):
+        print("%s is there! Good!" % (inffile_abspath))
+else:
+        print("File %s not found. Downloading it from %s..." % (inf_filename, server), end=''); sys.stdout.flush()
+        urllib.request.urlretrieve( inffile_urlpath, inffile_abspath )
+        print("done!"); sys.stdout.flush()
+
+
+        
+print()
+print("Doing realfft  of %s... " % (datfile_abspath), end=''); sys.stdout.flush()
+fftfile_abspath = realfft(datfile_abspath, "/tmp", work_dir, "LOG_01_realfft.txt", other_flags="", presto_env=presto_path, verbosity_level=0, flag_LOG_append=0)
 print("...done!")
 print()
 print()
@@ -466,7 +486,7 @@ if flag_test_CPU == 1:
         dict_test_results['CPU'] = 0
         for k in range(len(list_zmax)):
                 zmax = list_zmax[k]
-                print("Doing accelsearch of %s with zmax = %4d on CPU (%s)..." % (fftfile_abspath, zmax, gpu_device_name),  end=''); sys.stdout.flush()
+                print("Doing accelsearch of %s with zmax = %4d on CPU..." % (fftfile_abspath, zmax),  end=''); sys.stdout.flush()
                 log_file_abspath = os.path.join(work_dir, "LOG_02_accelsearch_CPU_zmax_%d.txt" % (zmax))
                 time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, numharm=8, zmax=zmax, other_flags="-ncpus 10", dict_env=dict_env_presto, verbosity_level=0, flag_LOG_append=1)
                 print 
