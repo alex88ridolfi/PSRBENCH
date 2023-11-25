@@ -104,7 +104,7 @@ You can also ask PSRBENCH to show you the plot at the end of the run using the `
 
     
 ## References
-If you effectively used PULSAR_MINER for your work, I would appreciate if you could cite the [PSRBENCH GitHub repository](https://github.com/alex88ridolfi/psrbench).
+If you effectively used PSRBENCH for your work, I would appreciate if you could cite the [PSRBENCH GitHub repository](https://github.com/alex88ridolfi/psrbench).
 
 Thanks!
 
