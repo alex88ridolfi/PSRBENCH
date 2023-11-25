@@ -523,7 +523,7 @@ ax.set_xlabel("Zmax")
 ax.set_title(str_plot_title)
 ax.set_xticks(x + width, list_zmax)
 ax.legend(loc='upper left')
-plt.savefig("psrbench_histogram_%s.png", start_datetime_str)
+plt.savefig("psrbench_histogram_%s.png" % start_datetime_str)
 if flag_showplot == 1:
     plt.show()
 
