@@ -78,7 +78,31 @@ To enable the GPU part of the benchmark:
 
 
 ## Basic usage
+To run the CPU benchmark:
 
+    psrbench -tests accelsearch_CPU
+
+To run the GPU benchmark:
+
+    psrbench -tests accelsearch_GPU
+
+To run both the CPU and GPU benchmarks:
+
+    psrbench -tests accelsearch_GPU,accelsearch_CPU
+
+By default PSRBENCH runs PRESTO'S `accelsearch` with the `zmax` values of 25,50,75,150,300,600 and 1200.
+These values can be customized by using the `-zmax` option of PSRBENCH.
+For example, if I wanted to run the tests with the `zmax` values of 200,400,600, I would run:
+
+    psrbench -tests accelsearch_GPU,accelsearch_CPU -zmax "200,400,600"
+
+At the end of the run, PSRBENCH produces an output plot saved as `psrbench_histogram_YYYYMMDD_HHMMSS.png`, where `YYYYMMDD_HHMMSS` is the date and time at which thecode was started.
+
+You can also ask PSRBENCH to show you the plot at the end of the run using the `-D` option:
+
+    psrbench -tests accelsearch_GPU,accelsearch_CPU -zmax "200,400,600" -D
+
+    
 ## References
 If you effectively used PULSAR_MINER for your work, I would appreciate if you could cite the [PSRBENCH GitHub repository](https://github.com/alex88ridolfi/psrbench).
 

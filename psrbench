@@ -337,15 +337,15 @@ if verbosity_level >= 1:
 
 # SHELL ARGUMENTS
 if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--help" in sys.argv)):
-        print("USAGE1: %s -tests {accelsearch_CPU,accelsearch_GPU} [-zmax \"50,100,200,400\"]  [{-Q | -v | -V}]" % (os.path.basename(sys.argv[0])))
+        print("USAGE1: %s -tests {accelsearch_CPU,accelsearch_GPU} [-zmax \"50,100,200,400\"] [-D] [{-Q | -v | -V}]" % (os.path.basename(sys.argv[0])))
         print()
         print("%10s  %-32s:  %-50s" % ("-h", "", "Print help"))
         print("%10s  %-32s:  %-50s" % ("-zmax", "", "Manually specify list of zmax values to test"))
         print("%10s  %-32s:  %-50s" % ("-Q", "", "Quiet mode - do not print anything"))
         print("%10s  %-32s:  %-50s" % ("-v", "", "Verbose mode - print more useful info about the processing"))
         print("%10s  %-32s:  %-50s" % ("-V", "", "Very verbose mode - print everything to debug issues"))
+        print("%10s  %-32s:  %-50s" % ("-D", "", "Show plot at the end of benchmarks"))
         print("%10s  %-32s:  %-50s" % ("-version", "", "Print code version"))
-
         print()
         print("NOTE: Make sure that the PRESTO and PRESTO2_ON_GPU are correctly set")
         print()
