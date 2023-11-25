@@ -3,31 +3,16 @@
 
 import sys
 import os
-import os.path
 import glob
 import subprocess
-import multiprocessing
-import shlex
 import shutil
-import copy
-import random
 import time
 import datetime
 import numpy as np
 import urllib.request
 import pylab as plt
 
-try:
-        from presto import filterbank, infodata, parfile, psr_utils, psrfits, rfifind, sifting
-except:
-        print("\nERROR: Could not not load the PRESTO python modules!")
-        print("Please make sure that your PRESTO python modules are actually installed and working.\n")
-        exit()
-
-        
-
 import warnings
-from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
@@ -110,48 +95,6 @@ class Inffile(object):
                 inffile.close()
 
 
-
-def execute_and_log_in_thread_pool(command, log_dir, work_dir, id_num, N_ids, flag_log=1):
-       datetime_start = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
-       datetime_start_single_string = (datetime.datetime.now()).strftime("%Y%m%d_%H%M")
-       time_start = time.time()
-       if "/" in command.split()[0]:
-              command_label = command.split("/")[-1].split()[0]
-       else:
-              command_label = command.split()[0]
-       list_for_Popen = command.split()
-
-       for i in range(len(list_for_Popen)):
-              current_piece = list_for_Popen[i]
-
-              if "?" in current_piece or "*" in current_piece:
-                     new_list_for_Popen = list_for_Popen[:i] + sorted(glob.glob(current_piece)) + list_for_Popen[i+1:]
-                     list_for_Popen = new_list_for_Popen
-
-       if flag_log == 1:
-               log_filename = "LOG_%s_%s_%03d.txt" % (command_label, datetime_start_single_string, int(id_num))
-               log_abspath = os.path.join(log_dir, log_filename)
-               log_file = open(log_abspath, "w+")
-               log_file.write("****************************************************************\n")
-               log_file.write("START DATE AND TIME: %s\n" % (datetime_start))
-               log_file.write("\nCOMMAND:\n")
-               log_file.write("%s\n\n" % (command))
-               log_file.write("WORKING DIRECTORY: %s\n" % (work_dir))
-               log_file.write("****************************************************************\n")
-               log_file.flush()
-               proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=log_file, stderr=log_file)
-       elif flag_log == 0:
-               print("Not logging..")
-               proc = subprocess.Popen(list_for_Popen, cwd=work_dir, stdout=subprocess.PIPE)
-       proc.communicate()
-
-       datetime_end = (datetime.datetime.now()).strftime("%Y/%m/%d  %H:%M")
-       time_end = time.time()
-
-       log_file.write("\nEND DATE AND TIME: %s\n" % (datetime_end))
-       log_file.write("\nTOTAL TIME TAKEN: %d s\n" % (time_end - time_start))
-       log_file.close()
-       print("Command %4d/%d complete. " % (id_num+1, N_ids)); sys.stdout.flush()
 
 
 def execute_and_log(command, work_dir, log_abspath, dict_envs={}, flag_append=0, verbosity_level=0):
@@ -368,6 +311,33 @@ work_dir = os.getcwd()
 
 dict_test_results = {}
 
+start_datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+if verbosity_level >= 1:
+        size_logo = 64
+        size_string_version = len(string_version_full)
+        dsize = int((size_logo - size_string_version)*0.5 - 1)
+        dsize_offset = size_string_version % 2
+
+        print()
+        print("#"*size_logo)
+        print("#" + " "*27 + "%s" % ("PSRBENCH") + " "*27 + "#")
+        print("#" + " "*(dsize + dsize_offset) + "%s" % (string_version_full) + " "*dsize + "#")
+        print("#"*size_logo)
+        print()
+        print("Command: %s" % (" ".join(sys.argv)))
+        print("Launch date_time: %s" % (start_datetime_str) )
+        print()
+        print()
+        if flag_test_GPU == 1:
+                print("GPU benchmark enabled  (PRESTO2_ON_GPU path: %s)" % (presto_gpu_path))
+        if flag_test_CPU == 1:
+                print("CPU benchmark enabled  (PRESTO         path: %s)" % (presto_path))
+
+        
+        print()
+        print("Data file: %s" % (datfile_abspath))
+        print()
+
 # SHELL ARGUMENTS
 if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--help" in sys.argv)):
         print("USAGE1: %s -tests {accelsearch_CPU,accelsearch_GPU} [-zmax \"50,100,200,400\"]  [{-Q | -v | -V}]" % (os.path.basename(sys.argv[0])))
@@ -436,31 +406,6 @@ if flag_test_GPU == 1:
 
 
 
-start_datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-if verbosity_level >= 1:
-        size_logo = 64
-        size_string_version = len(string_version_full)
-        dsize = int((size_logo - size_string_version)*0.5 - 1)
-        dsize_offset = size_string_version % 2
-
-        print()
-        print("#"*size_logo)
-        print("#" + " "*27 + "%s" % ("PSRBENCH") + " "*27 + "#")
-        print("#" + " "*(dsize + dsize_offset) + "%s" % (string_version_full) + " "*dsize + "#")
-        print("#"*size_logo)
-        print()
-        print("Command: %s" % (" ".join(sys.argv)))
-        print("Launch date_time: %s" % (start_datetime_str) )
-        print()
-        print()
-        if flag_test_GPU == 1:
-                print("GPU benchmark enabled  (PRESTO2_ON_GPU path: %s)" % (presto_gpu_path))
-        if flag_test_CPU == 1:
-                print("CPU benchmark enabled  (PRESTO         path: %s)" % (presto_path))
-
-        
-        print()
-        print("Data file: %s" % (datfile_abspath))
 
 print()
 if os.path.exists(datfile_abspath):
