@@ -14,18 +14,31 @@ At minimum, PSRBENCH requires:
 For the GPU benchmark:
 - [*optional*] A CUDA-compatible GPU (i.e. an NVIDIA GPU) and Jintao Luo's [PRESTO2_ON_GPU](https://github.com/jintaoluo/presto2_on_gpu)    
 
-    
-If present, PSRBENCH can also benefit from:    
-- [*optional*] the PRESTO Python3 libraries
-
 
 
 
 ## Installation
 
-### Docker
-The easiest way to use PSRBENCH is by downloading one of its Docker images and run it from there.
+### Docker / Singularity
+The easiest way to use PSRBENCH is by downloading one of its Docker image:
 
+    docker pull alex88ridolfi/psrbench:ampere-sm86
+
+and run the code from within the image:
+    docker run -ti alex88ridolfi/psrbench:ampere-sm86
+
+Clearly, you can use Singularity/Apptainer, if prefer so:
+
+    singularity pull docker://alex88ridolfi/psrbench:ampere-sm86
+
+and run the code from within the image with:
+    
+    singularity shell --nv psrbench_ampere-sm86.sif
+or
+
+    singularity shell --nv --nvccli psrbench_ampere-sm86.sif
+
+    
 
 ### Manual installation
 Otherwise, you can install PSRBENCH and its dependencies manually.
