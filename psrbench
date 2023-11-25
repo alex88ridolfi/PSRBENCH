@@ -291,8 +291,9 @@ webloc        = "http://pulsar.oa-cagliari.inaf.it/pulsar_data"
 dat_filename  = "NGC1851_test_obs_2h.dat"
 inf_filename  = "NGC1851_test_obs_2h.inf"
 dir_psrbench  = os.path.abspath( os.path.dirname( __file__ ) )
+work_dir = os.getcwd()
 
-dir_testdata_abspath = os.path.join(dir_psrbench, "test_data") 
+dir_testdata_abspath = os.path.join(work_dir, "test_data")
 datfile_abspath = os.path.join(dir_testdata_abspath, dat_filename)
 inffile_abspath = os.path.join(dir_testdata_abspath, inf_filename)
 datfile_urlpath = os.path.join(webloc, dat_filename)
@@ -312,7 +313,7 @@ gpu_model_name = ''
 cpu_model_name = ''
 str_plot_title = ''
 
-work_dir = os.getcwd()
+
 
 dict_test_results = {}
 
@@ -519,7 +520,7 @@ for test_name, measurements in dict_test_results.items():
 
 # Add some text for labels, title and custom x-axis tick labels, etc.
 ax.set_ylabel("Time taken (s)")
-ax.set_xlabel("Zmax")
+ax.set_xlabel("zmax")
 ax.set_title(str_plot_title)
 ax.set_xticks(x + width, list_zmax)
 ax.legend(loc='upper left')
