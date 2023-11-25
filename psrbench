@@ -292,16 +292,21 @@ dat_filename  = "NGC1851_test_obs_2h.dat"
 inf_filename  = "NGC1851_test_obs_2h.inf"
 dir_psrbench  = os.path.abspath( os.path.dirname( __file__ ) )
 
-datfile_abspath = os.path.join(dir_psrbench, dat_filename)
-inffile_abspath = os.path.join(dir_psrbench, inf_filename)
+dir_testdata_abspath = os.path.join(dir_psrbench, "test_data") 
+datfile_abspath = os.path.join(dir_testdata_abspath, dat_filename)
+inffile_abspath = os.path.join(dir_testdata_abspath, inf_filename)
 datfile_urlpath = os.path.join(webloc, dat_filename)
 inffile_urlpath = os.path.join(webloc, inf_filename)
 
+if not os.path.exists(dir_testdata_abspath):
+        os.mkdir(dir_testdata_abspath)
+    
 
 list_zmax = [25,50,75,150,300,600,1200]
 
 flag_test_CPU = 0
 flag_test_GPU = 0
+flag_showplot = 0
 
 gpu_model_name = ''
 cpu_model_name = ''
@@ -328,15 +333,6 @@ if verbosity_level >= 1:
         print("Launch date_time: %s" % (start_datetime_str) )
         print()
         print()
-        if flag_test_GPU == 1:
-                print("GPU benchmark enabled  (PRESTO2_ON_GPU path: %s)" % (presto_gpu_path))
-        if flag_test_CPU == 1:
-                print("CPU benchmark enabled  (PRESTO         path: %s)" % (presto_path))
-
-        
-        print()
-        print("Data file: %s" % (datfile_abspath))
-        print()
 
 # SHELL ARGUMENTS
 if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--help" in sys.argv)):
@@ -361,10 +357,8 @@ else:
                 if (sys.argv[j] == "-tests"):
                         if "accelsearch_CPU" in sys.argv[j+1]:
                                 flag_test_CPU = 1
-                                print("CPU benchmark enabled")
                         if "accelsearch_GPU" in sys.argv[j+1]:
                                 flag_test_GPU =	1
-                                print("GPU benchmark enabled")
                 elif (sys.argv[j] == "-zmax"):
                         list_zmax = [int(x) for x in sys.argv[j+1].split(",")]
                 elif (sys.argv[j] == "-Q"):
@@ -373,6 +367,8 @@ else:
                         verbosity_level = 2
                 elif (sys.argv[j] == "-V"):
                         verbosity_level = 3
+                elif (sys.argv[j] == "-D"):
+                        flag_showplot = 1
 
 try:
         presto_path = os.environ['PRESTO']
@@ -387,6 +383,7 @@ if flag_test_CPU == 1:
         print(str_plot_title)
         
         
+        
 if flag_test_GPU == 1:
         try:
 	        presto_gpu_path = os.environ['PRESTO2_ON_GPU']
@@ -399,13 +396,30 @@ if flag_test_GPU == 1:
                         exit()
 
         gpu_model_name = get_command_output("nvidia-smi --id=0 --query-gpu=name --format=csv,noheader").strip()
-        str_plot_title = str_plot_title + "\nGPU: %s" % (gpu_model_name)
-        
-        print("GPU model: %s" % (gpu_model_name))
+        str_gpu_model = "GPU: %s" % (gpu_model_name)
+        print(str_gpu_model)
+
+        if str_plot_title == "":
+            str_plot_title = str_gpu_model
+        else:
+            str_plot_title = str_plot_title + "\n%s" % (str_gpu_model)
+
         dict_env_presto_gpu = {'PRESTO': presto_gpu_path,   'PATH': "%s/bin:%s" % (presto_gpu_path, os.environ['PATH']),   'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_gpu_path,  os.environ['LD_LIBRARY_PATH'])}
 
+if verbosity_level >= 1:
+    print()
+    if flag_test_GPU == 1:
+        print("GPU benchmark enabled  (PRESTO2_ON_GPU path: %s)" % (presto_gpu_path))
+    if flag_test_CPU == 1:
+        print("CPU benchmark enabled  (PRESTO         path: %s)" % (presto_path))
+
+        
+        print()
+        print("Data file: %s" % (datfile_abspath))
+        print()
 
 
+str_plot_title = "PRESTO's accelsearch on a 120000000-point time series\n\n" + str_plot_title        
 
 print()
 if os.path.exists(datfile_abspath):
@@ -427,7 +441,7 @@ else:
         
 print()
 print("Doing realfft  of %s... " % (datfile_abspath), end=''); sys.stdout.flush()
-fftfile_abspath = realfft(datfile_abspath, "/tmp", work_dir, "LOG_01_realfft.txt", other_flags="", presto_env=presto_path, verbosity_level=0, flag_LOG_append=0)
+fftfile_abspath = realfft(datfile_abspath, dir_testdata_abspath, work_dir, "LOG_01_realfft.txt", other_flags="", presto_env=presto_path, verbosity_level=0, flag_LOG_append=0)
 print("...done!")
 print()
 print()
@@ -439,11 +453,15 @@ array_times_CPU = np.zeros(len(list_zmax))
 
 ##########################################################################################
 if flag_test_CPU == 1:
+        print("***********************************************************************")
+        print("           CPU BENCHMARK (%s)                    " % (cpu_model_name))
+        print("***********************************************************************")
+
         dict_test_results['CPU'] = 0
 
         for k in range(len(list_zmax)):
                 zmax = list_zmax[k]
-                print("Doing accelsearch of %s with zmax = %4d on CPU (%s)..." % (fftfile_abspath, zmax, cpu_model_name),  end=''); sys.stdout.flush()
+                print("Doing accelsearch of %s with zmax = %4d on CPU..." % (fftfile_abspath, zmax),  end=''); sys.stdout.flush()
                 log_file_abspath = os.path.join(work_dir, "LOG_02_accelsearch_CPU_zmax_%d.txt" % (zmax))
                 time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, numharm=8, zmax=zmax, other_flags="-ncpus 10", dict_env=dict_env_presto, verbosity_level=0, flag_LOG_append=1)
                 print 
@@ -459,13 +477,17 @@ if flag_test_CPU == 1:
 
 
 ##########################################################################################
+
 print()
 print()
 if flag_test_GPU == 1:
+        print("***********************************************************************")
+        print("           GPU BENCHMARK (%s)                    " % (gpu_model_name))
+        print("***********************************************************************")
         dict_test_results['GPU'] = 0
         for k in range(len(list_zmax)):
                 zmax = list_zmax[k]
-                print("Doing accelsearch of %s with zmax = %4d on GPU (%s)..." % (fftfile_abspath, zmax, gpu_model_name),  end=''); sys.stdout.flush()
+                print("Doing accelsearch of %s with zmax = %4d on GPU..." % (fftfile_abspath, zmax),  end=''); sys.stdout.flush()
                 log_file_abspath = os.path.join(work_dir, "LOG_02_accelsearch_GPU_zmax_%d.txt" % (zmax))
                 time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, numharm=8, zmax=zmax, other_flags="-cuda 0", dict_env=dict_env_presto_gpu, verbosity_level=0, flag_LOG_append=1)
                 print 
@@ -487,7 +509,7 @@ x = np.arange(len(list_zmax))  # the label locations
 width = 0.25  # the width of the bars
 multiplier = 0
 
-fig, ax = plt.subplots(layout='constrained')
+fig, ax = plt.subplots(figsize=(7,7), layout='constrained')
 
 for test_name, measurements in dict_test_results.items():
     offset = width * multiplier
@@ -501,7 +523,8 @@ ax.set_xlabel("Zmax")
 ax.set_title(str_plot_title)
 ax.set_xticks(x + width, list_zmax)
 ax.legend(loc='upper left')
-plt.savefig("psrbench_histogram.png")
-plt.show()
+plt.savefig("psrbench_histogram_%s.png", start_datetime_str)
+if flag_showplot == 1:
+    plt.show()
 
 
