@@ -31,9 +31,9 @@ from multiprocessing.pool import ThreadPool
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "0.1 (24Nov2023)"
-string_version = "24Nov2023"
-number_version = 20231124
+string_version_full = "0.1 (25Nov2023)"
+string_version = "25Nov2023"
+number_version = 20231125
 
 class colors:
     HEADER = '\033[95m'
@@ -360,7 +360,9 @@ list_zmax = [25,50,75,150,300,600,1200]
 flag_test_CPU = 0
 flag_test_GPU = 0
 
-gpu_device_name = ''
+gpu_model_name = ''
+cpu_model_name = ''
+str_plot_title = ''
 
 work_dir = os.getcwd()
 
@@ -409,6 +411,12 @@ except:
         print("ERROR: PRESTO environment variable not set!")
         exit()
 
+if flag_test_CPU == 1:
+        cpu_model_name = get_command_output_with_pipe("lscpu", "grep name").split(":")[-1].strip()
+        str_plot_title = str_plot_title + "CPU: %s" % (cpu_model_name)
+        print(str_plot_title)
+        
+        
 if flag_test_GPU == 1:
         try:
 	        presto_gpu_path = os.environ['PRESTO2_ON_GPU']
@@ -420,10 +428,13 @@ if flag_test_GPU == 1:
                         print("ERROR: PRESTO2_ON_GPU environment variable not set!")
                         exit()
 
-        gpu_device_name = get_command_output("nvidia-smi --id=0 --query-gpu=name --format=csv,noheader").strip()
-        print("GPU model: %s" % (gpu_device_name))
-        dict_env_presto_gpu = {'PRESTO': presto_gpu_path,   'PATH': "%s/bin:%s" % (presto_gpu_path, os.environ['PATH']),   'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_gpu_path,  os.environ['LD_LIBRARY_PATH'])}
+        gpu_model_name = get_command_output("nvidia-smi --id=0 --query-gpu=name --format=csv,noheader").strip()
+        str_plot_title = str_plot_title + "\nGPU: %s" % (gpu_model_name)
         
+        print("GPU model: %s" % (gpu_model_name))
+        dict_env_presto_gpu = {'PRESTO': presto_gpu_path,   'PATH': "%s/bin:%s" % (presto_gpu_path, os.environ['PATH']),   'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_gpu_path,  os.environ['LD_LIBRARY_PATH'])}
+
+
 
 start_datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 if verbosity_level >= 1:
@@ -484,9 +495,10 @@ array_times_CPU = np.zeros(len(list_zmax))
 ##########################################################################################
 if flag_test_CPU == 1:
         dict_test_results['CPU'] = 0
+
         for k in range(len(list_zmax)):
                 zmax = list_zmax[k]
-                print("Doing accelsearch of %s with zmax = %4d on CPU..." % (fftfile_abspath, zmax),  end=''); sys.stdout.flush()
+                print("Doing accelsearch of %s with zmax = %4d on CPU (%s)..." % (fftfile_abspath, zmax, cpu_model_name),  end=''); sys.stdout.flush()
                 log_file_abspath = os.path.join(work_dir, "LOG_02_accelsearch_CPU_zmax_%d.txt" % (zmax))
                 time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, numharm=8, zmax=zmax, other_flags="-ncpus 10", dict_env=dict_env_presto, verbosity_level=0, flag_LOG_append=1)
                 print 
@@ -508,7 +520,7 @@ if flag_test_GPU == 1:
         dict_test_results['GPU'] = 0
         for k in range(len(list_zmax)):
                 zmax = list_zmax[k]
-                print("Doing accelsearch of %s with zmax = %4d on GPU (%s)..." % (fftfile_abspath, zmax, gpu_device_name),  end=''); sys.stdout.flush()
+                print("Doing accelsearch of %s with zmax = %4d on GPU (%s)..." % (fftfile_abspath, zmax, gpu_model_name),  end=''); sys.stdout.flush()
                 log_file_abspath = os.path.join(work_dir, "LOG_02_accelsearch_GPU_zmax_%d.txt" % (zmax))
                 time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, numharm=8, zmax=zmax, other_flags="-cuda 0", dict_env=dict_env_presto_gpu, verbosity_level=0, flag_LOG_append=1)
                 print 
@@ -541,10 +553,10 @@ for test_name, measurements in dict_test_results.items():
 # Add some text for labels, title and custom x-axis tick labels, etc.
 ax.set_ylabel("Time taken (s)")
 ax.set_xlabel("Zmax")
-ax.set_title("Accelsearch on GPU (%s)" % (gpu_device_name))
+ax.set_title(str_plot_title)
 ax.set_xticks(x + width, list_zmax)
 ax.legend(loc='upper left')
-
-plt.show()
 plt.savefig("psrbench_histogram.png")
+plt.show()
+
 
