@@ -25,9 +25,10 @@ The easiest way to use PSRBENCH is by downloading one of its Docker image:
     docker pull alex88ridolfi/psrbench:ampere-sm86
 
 and run the code from within the image:
+
     docker run -ti alex88ridolfi/psrbench:ampere-sm86
 
-Clearly, you can use Singularity/Apptainer, if prefer so:
+Clearly, you can use Singularity/Apptainer, if you prefer so:
 
     singularity pull docker://alex88ridolfi/psrbench:ampere-sm86
 
@@ -90,11 +91,20 @@ To run both the CPU and GPU benchmarks:
 
     psrbench -tests accelsearch_GPU,accelsearch_CPU
 
-By default PSRBENCH runs PRESTO'S `accelsearch` with the `zmax` values of 25,50,75,150,300,600 and 1200.
+By default PSRBENCH runs PRESTO's `accelsearch` with the `zmax` values of 25,50,75,150,300,600 and 1200.
 These values can be customized by using the `-zmax` option of PSRBENCH.
 For example, if I wanted to run the tests with the `zmax` values of 200,400,600, I would run:
 
     psrbench -tests accelsearch_GPU,accelsearch_CPU -zmax "200,400,600"
+
+By default, when accelsearch is run on CPU, it uses 10 CPU threads and sums 8 harmonics (`-ncpus 10 -numharm 8`).
+
+By default, when accelsearch is run on GPU,	it uses the GPU number "0", 1 CPU thread, and sums 8 harmonics (`-cuda 0 -numharm 8`).
+
+These behaviours can be changed with the `-flags_accelsearch_cpu` and `-flags_accelsearch_gpu` options, respectively.
+For instance, if I want to use only 2 threads for accelsearch on CPU, use my second GPU on my system (GPU id "1") and sum only 4 harmonics in both, I would run:
+
+    psrbench -tests accelsearch_GPU,accelsearch_CPU -flags_accelsearch_cpu "-ncpus 2 -numharm 4" -flags_accelsearch_gpu "-cuda 1 -numharm 4" -zmax "200,400,600"
 
 At the end of the run, PSRBENCH produces an output plot saved as `psrbench_histogram_YYYYMMDD_HHMMSS.png`, where `YYYYMMDD_HHMMSS` is the date and time at which thecode was started.
 
@@ -102,7 +112,7 @@ You can also ask PSRBENCH to show you the plot at the end of the run using the `
 
     psrbench -tests accelsearch_GPU,accelsearch_CPU -zmax "200,400,600" -D
 
-    
+        
 ## References
 If you effectively used PSRBENCH for your work, I would appreciate if you could cite the [PSRBENCH GitHub repository](https://github.com/alex88ridolfi/psrbench).
 

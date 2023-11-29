@@ -16,9 +16,9 @@ import warnings
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "0.1 (25Nov2023)"
-string_version = "25Nov2023"
-number_version = 20231125
+string_version_full = "0.1 (29Nov2023)"
+string_version = "29Nov2023"
+number_version = 20231129
 
 class colors:
     HEADER = '\033[95m'
@@ -199,12 +199,12 @@ def check_accelsearch_result(fft_infile, zmax, verbosity_level=0):
         return check_result
 
 
-def accelsearch(infile, work_dir, log_abspath, numharm=8, zmax=0, other_flags="", dict_env= {}, verbosity_level=0, flag_LOG_append=1):
+def accelsearch(infile, work_dir, log_abspath, zmax=0, other_flags="", dict_env= {}, verbosity_level=0, flag_LOG_append=1):
         infile_nameonly = os.path.basename(infile)
         infile_basename = os.path.splitext(infile_nameonly)[0]
         inffile_empty = infile.replace(".fft", "_ACCEL_%d_empty" % (zmax))
 
-        cmd_accelsearch = "accelsearch %s -zmax %s -numharm %s %s" % (other_flags, zmax, numharm, infile)
+        cmd_accelsearch = "accelsearch %s -zmax %s %s" % (other_flags, zmax, infile)
 
         if verbosity_level >= 2:
                 print()
@@ -305,6 +305,9 @@ if not os.path.exists(dir_testdata_abspath):
 
 list_zmax = [25,50,75,150,300,600,1200]
 
+flags_accelsearch_cpu = "-ncpus 10 -numharm 8"
+flags_accelsearch_gpu = "-cuda 0 -numharm 8"
+
 flag_test_CPU = 0
 flag_test_GPU = 0
 flag_showplot = 0
@@ -340,12 +343,15 @@ if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--hel
         print("USAGE1: %s -tests {accelsearch_CPU,accelsearch_GPU} [-zmax \"50,100,200,400\"] [-D] [{-Q | -v | -V}]" % (os.path.basename(sys.argv[0])))
         print()
         print("%10s  %-32s:  %-50s" % ("-h", "", "Print help"))
+        print("%10s  %-32s:  %-50s" % ("-flags_accelsearch_cpu", "[default: \"-ncpus 10 -numharm 8\"", "Print help"))
+        print("%10s  %-32s:  %-50s" % ("-flags_accelsearch_gpu", "[default: \"-cuda 0   -numharm 8\"", "Print help"))
         print("%10s  %-32s:  %-50s" % ("-zmax", "", "Manually specify list of zmax values to test"))
         print("%10s  %-32s:  %-50s" % ("-Q", "", "Quiet mode - do not print anything"))
         print("%10s  %-32s:  %-50s" % ("-v", "", "Verbose mode - print more useful info about the processing"))
         print("%10s  %-32s:  %-50s" % ("-V", "", "Very verbose mode - print everything to debug issues"))
         print("%10s  %-32s:  %-50s" % ("-D", "", "Show plot at the end of benchmarks"))
         print("%10s  %-32s:  %-50s" % ("-version", "", "Print code version"))
+        
         print()
         print("NOTE: Make sure that the PRESTO and PRESTO2_ON_GPU are correctly set")
         print()
@@ -362,6 +368,10 @@ else:
                                 flag_test_GPU =	1
                 elif (sys.argv[j] == "-zmax"):
                         list_zmax = [int(x) for x in sys.argv[j+1].split(",")]
+                elif (sys.argv[j] == "-flags_accelsearch_cpu"):
+                        flags_accelsearch_cpu = sys.argv[j+1]
+                elif (sys.argv[j] == "-flags_accelsearch_gpu"):
+                        flags_accelsearch_gpu = sys.argv[j+1]
                 elif (sys.argv[j] == "-Q"):
                         verbosity_level = 0
                 elif (sys.argv[j] == "-v"):
@@ -462,9 +472,9 @@ if flag_test_CPU == 1:
 
         for k in range(len(list_zmax)):
                 zmax = list_zmax[k]
-                print("Doing accelsearch of %s with zmax = %4d on CPU..." % (fftfile_abspath, zmax),  end=''); sys.stdout.flush()
+                print("Doing 'accelsearch %s' of %s with zmax = %4d on CPU..." % (flags_accelsearch_cpu, fftfile_abspath, zmax),  end=''); sys.stdout.flush()
                 log_file_abspath = os.path.join(work_dir, "LOG_02_accelsearch_CPU_zmax_%d.txt" % (zmax))
-                time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, numharm=8, zmax=zmax, other_flags="-ncpus 10", dict_env=dict_env_presto, verbosity_level=0, flag_LOG_append=1)
+                time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, zmax=zmax, other_flags=flags_accelsearch_cpu, dict_env=dict_env_presto, verbosity_level=0, flag_LOG_append=1)
                 print 
                 if time_taken_accelsearch_s == -1:
                         print("FAILED! Check log in file '%s' for more details." % (log_file_abspath)) ; sys.stdout.flush()
@@ -488,9 +498,9 @@ if flag_test_GPU == 1:
         dict_test_results['GPU'] = 0
         for k in range(len(list_zmax)):
                 zmax = list_zmax[k]
-                print("Doing accelsearch of %s with zmax = %4d on GPU..." % (fftfile_abspath, zmax),  end=''); sys.stdout.flush()
+                print("Doing 'accelsearch %s' of %s with zmax = %4d on GPU..." % (flags_accelsearch_gpu, fftfile_abspath, zmax),  end=''); sys.stdout.flush()
                 log_file_abspath = os.path.join(work_dir, "LOG_02_accelsearch_GPU_zmax_%d.txt" % (zmax))
-                time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, numharm=8, zmax=zmax, other_flags="-cuda 0", dict_env=dict_env_presto_gpu, verbosity_level=0, flag_LOG_append=1)
+                time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, zmax=zmax, other_flags=flags_accelsearch_gpu, dict_env=dict_env_presto_gpu, verbosity_level=0, flag_LOG_append=1)
                 print 
                 if time_taken_accelsearch_s == -1:
                         print("FAILED! Check log in file '%s' for more details." % (log_file_abspath)) ; sys.stdout.flush()
