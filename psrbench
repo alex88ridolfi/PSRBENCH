@@ -16,9 +16,9 @@ import warnings
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "0.1 (29Nov2023)"
-string_version = "29Nov2023"
-number_version = 20231129
+string_version_full = "0.2 (16Feb2024)"
+string_version = "16Feb2024"
+number_version = 20240216
 
 class colors:
     HEADER = '\033[95m'
@@ -238,11 +238,11 @@ def accelsearch(infile, work_dir, log_abspath, zmax=0, other_flags="", dict_env=
         if verbosity_level >= 2:
                 print("END ACCELSEARCH ---------------------------------------------------------------------- ")
 
-        if check_accelsearch_result(infile, int(zmax)) == False and check_accelsearch_result(inffile_empty, int(zmax)) == False:
-                return -1
-        else:
-                return time_taken_accelsearch_s
-
+        #if check_accelsearch_result(infile, int(zmax)) == False and check_accelsearch_result(inffile_empty, int(zmax)) == False:
+        #        return -1
+        #else:
+        #        return time_taken_accelsearch_s
+        return time_taken_accelsearch_s
 
 
 def realfft(infile, out_dir, log_dir, LOG_basename, other_flags="", presto_env=os.environ['PRESTO'], verbosity_level=0, flag_LOG_append=0):
@@ -288,31 +288,35 @@ verbosity_level = 1
 
 server        = "http://pulsar.oa-cagliari.inaf.it"
 webloc        = "http://pulsar.oa-cagliari.inaf.it/pulsar_data"
-dat_filename  = "NGC1851_test_obs_2h.dat"
-inf_filename  = "NGC1851_test_obs_2h.inf"
+dat_filename  = "ts_47TucE_47T061_3.dat"
+inf_filename  = "ts_47TucE_47T061_3.inf"
 dir_psrbench  = os.path.abspath( os.path.dirname( __file__ ) )
 work_dir = os.getcwd()
 
-dir_testdata_abspath = os.path.join(work_dir, "test_data")
-datfile_abspath = os.path.join(dir_testdata_abspath, dat_filename)
-inffile_abspath = os.path.join(dir_testdata_abspath, inf_filename)
-datfile_urlpath = os.path.join(webloc, dat_filename)
-inffile_urlpath = os.path.join(webloc, inf_filename)
+dir_benchmark_abspath = os.path.join(work_dir, "benchmark_dir")
+datfile_web_urlpath = os.path.join(webloc, dat_filename)
+inffile_web_urlpath = os.path.join(webloc, inf_filename)
+datfile_web_abspath_default = os.path.join(dir_benchmark_abspath, dat_filename)
+inffile_web_abspath_default = os.path.join(dir_benchmark_abspath, inf_filename)
 
-if not os.path.exists(dir_testdata_abspath):
-        os.mkdir(dir_testdata_abspath)
+datfile_abspath = ""
+inffile_abspath = ""
+
+
+
+if not os.path.exists(dir_benchmark_abspath):
+        os.mkdir(dir_benchmark_abspath)
     
 
 list_zmax = [25,50,75,150,300,600,1200]
 
-flags_accelsearch_cpu = "-ncpus 10 -numharm 8"
-flags_accelsearch_gpu = "-cuda 0 -numharm 8"
 
 flag_test_CPU = 0
 flag_test_GPU = 0
 flag_showplot = 0
 
 gpu_model_name = ''
+gpu_id = 0
 cpu_model_name = ''
 str_plot_title = ''
 
@@ -340,17 +344,19 @@ if verbosity_level >= 1:
 
 # SHELL ARGUMENTS
 if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--help" in sys.argv)):
-        print("USAGE1: %s -tests {accelsearch_CPU,accelsearch_GPU} [-zmax \"50,100,200,400\"] [-D] [{-Q | -v | -V}]" % (os.path.basename(sys.argv[0])))
+        print("USAGE1: %s -tests {accelsearch_CPU,accelsearch_GPU} [-zmax \"50,100,200,400\"] [-gpu_id X] [-datfile <observation.dat>] [-D] [{-Q | -v | -V}]" % (os.path.basename(sys.argv[0])))
         print()
-        print("%10s  %-32s:  %-50s" % ("-h", "", "Print help"))
-        print("%10s  %-32s:  %-50s" % ("-flags_accelsearch_cpu", "[default: \"-ncpus 10 -numharm 8\"", "Print help"))
-        print("%10s  %-32s:  %-50s" % ("-flags_accelsearch_gpu", "[default: \"-cuda 0   -numharm 8\"", "Print help"))
-        print("%10s  %-32s:  %-50s" % ("-zmax", "", "Manually specify list of zmax values to test"))
-        print("%10s  %-32s:  %-50s" % ("-Q", "", "Quiet mode - do not print anything"))
-        print("%10s  %-32s:  %-50s" % ("-v", "", "Verbose mode - print more useful info about the processing"))
-        print("%10s  %-32s:  %-50s" % ("-V", "", "Very verbose mode - print everything to debug issues"))
-        print("%10s  %-32s:  %-50s" % ("-D", "", "Show plot at the end of benchmarks"))
-        print("%10s  %-32s:  %-50s" % ("-version", "", "Print code version"))
+        print("%27s  %-40s:  %-50s" % ("-h", "", "Print help"))
+        print("%27s  %-40s:  %-50s" % ("-flags_accelsearch_cpu", "[default: \"-ncpus 10 -numharm 8]\"", "Additional flags for accelsearch on CPU"))
+        print("%27s  %-40s:  %-50s" % ("-flags_accelsearch_gpu", "[default: \"-cuda 0   -numharm 8]\"", "Additional flags for accelsearch on GPU"))
+        print("%27s  %-40s:  %-50s" % ("-datfile", "[default: get default file from web]", "Specify the .dat file to run the test on (must have a corresponding .inf file)"))
+        print("%27s  %-40s:  %-50s" % ("-zmax", "", "Manually specify list of zmax values to test"))
+        print("%27s  %-40s:  %-50s" % ("-gpu_id", "[default: 0]", "Id of the GPU to use (check with 'nvidia-smi')"))
+        print("%27s  %-40s:  %-50s" % ("-Q", "", "Quiet mode - do not print anything"))
+        print("%27s  %-40s:  %-50s" % ("-v", "", "Verbose mode - print more useful info about the processing"))
+        print("%27s  %-40s:  %-50s" % ("-V", "", "Very verbose mode - print everything to debug issues"))
+        print("%27s  %-40s:  %-50s" % ("-D", "", "Show plot at the end of benchmarks"))
+        print("%27s  %-40s:  %-50s" % ("-version", "", "Print code version"))
         
         print()
         print("NOTE: Make sure that the PRESTO and PRESTO2_ON_GPU are correctly set")
@@ -366,12 +372,20 @@ else:
                                 flag_test_CPU = 1
                         if "accelsearch_GPU" in sys.argv[j+1]:
                                 flag_test_GPU =	1
+                elif (sys.argv[j] == "-datfile"):
+                        dat_filename = os.path.basename(sys.argv[j+1])
+                        inf_filename = os.path.splitext(dat_filename)[0] + ".inf"
+                        datfile_abspath = os.path.abspath(dat_filename)
+                        inffile_abspath = os.path.abspath(inf_filename)
+              
                 elif (sys.argv[j] == "-zmax"):
                         list_zmax = [int(x) for x in sys.argv[j+1].split(",")]
                 elif (sys.argv[j] == "-flags_accelsearch_cpu"):
                         flags_accelsearch_cpu = sys.argv[j+1]
                 elif (sys.argv[j] == "-flags_accelsearch_gpu"):
                         flags_accelsearch_gpu = sys.argv[j+1]
+                elif (sys.argv[j] == "-gpu_id"):
+                        gpu_id = int(sys.argv[j+1])
                 elif (sys.argv[j] == "-Q"):
                         verbosity_level = 0
                 elif (sys.argv[j] == "-v"):
@@ -405,8 +419,11 @@ if flag_test_GPU == 1:
                 except:
                         print("ERROR: PRESTO2_ON_GPU environment variable not set!")
                         exit()
-
-        gpu_model_name = get_command_output("nvidia-smi --id=0 --query-gpu=name --format=csv,noheader").strip()
+        try:
+            gpu_model_name = get_command_output("nvidia-smi --id=%d --query-gpu=name --format=csv,noheader" % (gpu_id)).strip() + " [id:%d]" % (gpu_id)
+        except:
+            gpu_model_name = "Undetected"
+            
         str_gpu_model = "GPU: %s" % (gpu_model_name)
         print(str_gpu_model)
 
@@ -417,6 +434,10 @@ if flag_test_GPU == 1:
 
         dict_env_presto_gpu = {'PRESTO': presto_gpu_path,   'PATH': "%s/bin:%s" % (presto_gpu_path, os.environ['PATH']),   'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_gpu_path,  os.environ['LD_LIBRARY_PATH'])}
 
+        flags_accelsearch_cpu = "-ncpus 10 -numharm 8"
+        flags_accelsearch_gpu = "-cuda %d -numharm 8" % (gpu_id)
+
+        
 if verbosity_level >= 1:
     print()
     if flag_test_GPU == 1:
@@ -425,35 +446,49 @@ if verbosity_level >= 1:
         print("CPU benchmark enabled  (PRESTO         path: %s)" % (presto_path))
 
         
-        print()
-        print("Data file: %s" % (datfile_abspath))
-        print()
+    print()
+    print("Data file: %s" % (datfile_abspath))
+    print()
 
 
-str_plot_title = "PRESTO's accelsearch on a 120000000-point time series\n\n" + str_plot_title        
 
-print()
-if os.path.exists(datfile_abspath):
-        print("%s is there! Good!" % (datfile_abspath)) 
-else:
-        print("File %s not found. Downloading it from %s..." % (dat_filename, server), end=''); sys.stdout.flush()
-        urllib.request.urlretrieve( datfile_urlpath, datfile_abspath )
-        print("done!"); sys.stdout.flush()
-
-
-if os.path.exists(inffile_abspath):
-        print("%s is there! Good!" % (inffile_abspath))
-else:
-        print("File %s not found. Downloading it from %s..." % (inf_filename, server), end=''); sys.stdout.flush()
-        urllib.request.urlretrieve( inffile_urlpath, inffile_abspath )
-        print("done!"); sys.stdout.flush()
-
-
+if datfile_abspath == "" and not os.path.exists(datfile_abspath) and not os.path.exists(datfile_web_abspath_default):
+        datfile_abspath = datfile_web_abspath_default
+        inffile_abspath = inffile_web_abspath_default
+        dat_filename = os.path.basename(datfile_abspath)
+        inf_filename = os.path.basename(inffile_abspath)
         
+        print("Datfile not found. Downloading default test file ('%s' + .inf file) from %s..." % (dat_filename, server), end=''); sys.stdout.flush()    
+        urllib.request.urlretrieve( datfile_web_urlpath, datfile_abspath)
+        urllib.request.urlretrieve( inffile_web_urlpath, inffile_abspath)
+
+        #print("datfile_abspath:", datfile_abspath)
+        #print("dat_filename:", dat_filename)
+        #print("inf_filename:", inf_filename)
+        #print("inffile_abspath:", inffile_abspath)
+        print("done!"); sys.stdout.flush()
+else:
+        if (os.path.exists(datfile_abspath) and os.path.exists(inffile_abspath)):
+                print()
+                print("%s and corresponding *.inf file are there! Good!" % (datfile_abspath)) 
+        elif (os.path.exists(datfile_web_abspath_default) and os.path.exists(inffile_web_abspath_default)):
+                datfile_abspath = datfile_web_abspath_default
+                inffile_abspath = inffile_web_abspath_default
+                print()
+                print("%s and corresponding *.inf file are there! Good!" % (datfile_abspath)) 
+            
+            
+inffile = Inffile(inffile_abspath)
+                
+str_plot_title = "PRESTO's accelsearch on a %d-point time series\n\n" % (inffile.nsamples) + str_plot_title
+
 print()
+print()
+print("Benchmark will be run on a %d-point timeseries." % (inffile.nsamples)) 
+print() 
 print("Doing realfft  of %s... " % (datfile_abspath), end=''); sys.stdout.flush()
-fftfile_abspath = realfft(datfile_abspath, dir_testdata_abspath, work_dir, "LOG_01_realfft.txt", other_flags="", presto_env=presto_path, verbosity_level=0, flag_LOG_append=0)
-print("...done!")
+fftfile_abspath = realfft(datfile_abspath, dir_benchmark_abspath, dir_benchmark_abspath, "01_realfft", other_flags="", presto_env=presto_path, verbosity_level=0, flag_LOG_append=0)
+print("done!"); sys.stdout.flush()
 print()
 print()
 
@@ -473,8 +508,8 @@ if flag_test_CPU == 1:
         for k in range(len(list_zmax)):
                 zmax = list_zmax[k]
                 print("Doing 'accelsearch %s' of %s with zmax = %4d on CPU..." % (flags_accelsearch_cpu, fftfile_abspath, zmax),  end=''); sys.stdout.flush()
-                log_file_abspath = os.path.join(work_dir, "LOG_02_accelsearch_CPU_zmax_%d.txt" % (zmax))
-                time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, zmax=zmax, other_flags=flags_accelsearch_cpu, dict_env=dict_env_presto, verbosity_level=0, flag_LOG_append=1)
+                log_file_abspath = os.path.join(dir_benchmark_abspath, "LOG_02_accelsearch_CPU_zmax_%d.txt" % (zmax))
+                time_taken_accelsearch_s = accelsearch(fftfile_abspath, dir_benchmark_abspath, log_file_abspath, zmax=zmax, other_flags=flags_accelsearch_cpu, dict_env=dict_env_presto, verbosity_level=0, flag_LOG_append=1)
                 print 
                 if time_taken_accelsearch_s == -1:
                         print("FAILED! Check log in file '%s' for more details." % (log_file_abspath)) ; sys.stdout.flush()
@@ -499,8 +534,8 @@ if flag_test_GPU == 1:
         for k in range(len(list_zmax)):
                 zmax = list_zmax[k]
                 print("Doing 'accelsearch %s' of %s with zmax = %4d on GPU..." % (flags_accelsearch_gpu, fftfile_abspath, zmax),  end=''); sys.stdout.flush()
-                log_file_abspath = os.path.join(work_dir, "LOG_02_accelsearch_GPU_zmax_%d.txt" % (zmax))
-                time_taken_accelsearch_s = accelsearch(fftfile_abspath, work_dir, log_file_abspath, zmax=zmax, other_flags=flags_accelsearch_gpu, dict_env=dict_env_presto_gpu, verbosity_level=0, flag_LOG_append=1)
+                log_file_abspath = os.path.join(dir_benchmark_abspath, "LOG_02_accelsearch_GPU_zmax_%d.txt" % (zmax))
+                time_taken_accelsearch_s = accelsearch(fftfile_abspath, dir_benchmark_abspath, log_file_abspath, zmax=zmax, other_flags=flags_accelsearch_gpu, dict_env=dict_env_presto_gpu, verbosity_level=0, flag_LOG_append=1)
                 print 
                 if time_taken_accelsearch_s == -1:
                         print("FAILED! Check log in file '%s' for more details." % (log_file_abspath)) ; sys.stdout.flush()
