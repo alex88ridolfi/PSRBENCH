@@ -49,8 +49,8 @@ def check_presto_path(presto_path, key):
 
 
 class Inffile(object):
-        def __init__(self, inffilename):
-                inffile = open(inffilename, "r")
+        def __init__(self, inffile_abspath):
+                inffile = open(inffile_abspath, "r")
                 for line in inffile:
                         if "Data file name without suffix" in line:
                                 self.datafilebasename = line.split("=")[-1].strip()
@@ -379,10 +379,11 @@ else:
                         if not sys.argv[j+1].endswith(".dat"):
                             print("ERROR! The input file must be a PRESTO timeseries, with a '.dat' file extension!")
                             exit()
-                        dat_filename = os.path.basename(sys.argv[j+1])
-                        inf_filename = os.path.splitext(dat_filename)[0] + ".inf"
-                        datfile_abspath = os.path.abspath(dat_filename)
-                        inffile_abspath = os.path.abspath(inf_filename)
+                        datfile_abspath = os.path.abspath(sys.argv[j+1])
+                        inffile_abspath = os.path.splitext(datfile_abspath)[0] + ".inf"
+                        dat_filename = os.path.basename(datfile_abspath)
+                        inf_filename = os.path.basename(inffile_abspath)
+
               
                 elif (sys.argv[j] == "-zmax"):
                         list_zmax = [int(x) for x in sys.argv[j+1].split(",")]
@@ -456,6 +457,7 @@ if verbosity_level >= 1:
         
     print()
     print("Data file: %s" % (datfile_abspath))
+    print("Inf  file: %s" % (inffile_abspath))
     print()
 
 
@@ -484,8 +486,9 @@ else:
                 inffile_abspath = inffile_web_abspath_default
                 print()
                 print("%s and corresponding *.inf file are there! Good!" % (datfile_abspath)) 
-            
-            
+
+
+print("inffile_abspath: ", inffile_abspath)
 inffile = Inffile(inffile_abspath)
                 
 str_plot_title = "PRESTO's accelsearch on a %d-point time series\n\n" % (inffile.nsamples) + str_plot_title
@@ -611,4 +614,10 @@ plt.savefig("psrbench_%s_histogram.png" % start_datetime_str)
 if flag_showplot == 1:
     plt.show()
 
-
+print()
+print("Removing '%s'..." % fftfile_abspath)
+os.remove(fftfile_abspath)
+print("done!"); sys.stdout.flush()
+print()
+print("Benchmark complete.")
+print()
