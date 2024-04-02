@@ -16,9 +16,9 @@ import warnings
 
 warnings.simplefilter('ignore', UserWarning)
 
-string_version_full = "0.2 (16Feb2024)"
-string_version = "16Feb2024"
-number_version = 20240216
+string_version_full = "0.3 (02Apr2024)"
+string_version = "02Apr2024"
+number_version = 20240402
 
 class colors:
     HEADER = '\033[95m'
@@ -286,14 +286,17 @@ def realfft(infile, out_dir, log_dir, LOG_basename, other_flags="", presto_env=o
 ###########################################################################################################################################################
 verbosity_level = 1
 
+start_datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
 server        = "http://pulsar.oa-cagliari.inaf.it"
 webloc        = "http://pulsar.oa-cagliari.inaf.it/pulsar_data"
 dat_filename  = "ts_47TucE_47T061_3.dat"
 inf_filename  = "ts_47TucE_47T061_3.inf"
 dir_psrbench  = os.path.abspath( os.path.dirname( __file__ ) )
+
 work_dir = os.getcwd()
 
-dir_benchmark_abspath = os.path.join(work_dir, "benchmark_dir")
+dir_benchmark_abspath = os.path.join(work_dir, "psrbench_%s_workdir" % (start_datetime_str))
 datfile_web_urlpath = os.path.join(webloc, dat_filename)
 inffile_web_urlpath = os.path.join(webloc, inf_filename)
 datfile_web_abspath_default = os.path.join(dir_benchmark_abspath, dat_filename)
@@ -320,7 +323,7 @@ gpu_id = 0
 cpu_model_name = ''
 str_plot_title = ''
 
-
+report_filename = "psrbench_%s_report.txt" % start_datetime_str
 
 dict_test_results = {}
 
@@ -347,7 +350,7 @@ if (len(sys.argv) == 1 or ("-h" in sys.argv) or ("-help" in sys.argv) or ("--hel
         print("USAGE1: %s -tests {accelsearch_CPU,accelsearch_GPU} [-zmax \"50,100,200,400\"] [-gpu_id X] [-datfile <observation.dat>] [-D] [{-Q | -v | -V}]" % (os.path.basename(sys.argv[0])))
         print()
         print("%27s  %-40s:  %-50s" % ("-h", "", "Print help"))
-        print("%27s  %-40s:  %-50s" % ("-flags_accelsearch_cpu", "[default: \"-ncpus 10 -numharm 8]\"", "Additional flags for accelsearch on CPU"))
+        print("%27s  %-40s:  %-50s" % ("-flags_accelsearch_cpu", "[default: \"-ncpus 1 -numharm 8]\"", "Additional flags for accelsearch on CPU"))
         print("%27s  %-40s:  %-50s" % ("-flags_accelsearch_gpu", "[default: \"-cuda 0   -numharm 8]\"", "Additional flags for accelsearch on GPU"))
         print("%27s  %-40s:  %-50s" % ("-datfile", "[default: get default file from web]", "Specify the .dat file to run the test on (must have a corresponding .inf file)"))
         print("%27s  %-40s:  %-50s" % ("-zmax", "", "Manually specify list of zmax values to test"))
@@ -373,6 +376,9 @@ else:
                         if "accelsearch_GPU" in sys.argv[j+1]:
                                 flag_test_GPU =	1
                 elif (sys.argv[j] == "-datfile"):
+                        if not sys.argv[j+1].endswith(".dat"):
+                            print("ERROR! The input file must be a PRESTO timeseries, with a '.dat' file extension!")
+                            exit()
                         dat_filename = os.path.basename(sys.argv[j+1])
                         inf_filename = os.path.splitext(dat_filename)[0] + ".inf"
                         datfile_abspath = os.path.abspath(dat_filename)
@@ -401,6 +407,8 @@ try:
 except:
         print("ERROR: PRESTO environment variable not set!")
         exit()
+
+
 
 if flag_test_CPU == 1:
         cpu_model_name = get_command_output_with_pipe("lscpu", "grep name").split(":")[-1].strip()
@@ -434,7 +442,7 @@ if flag_test_GPU == 1:
 
         dict_env_presto_gpu = {'PRESTO': presto_gpu_path,   'PATH': "%s/bin:%s" % (presto_gpu_path, os.environ['PATH']),   'LD_LIBRARY_PATH': "%s/lib:%s" % (presto_gpu_path,  os.environ['LD_LIBRARY_PATH'])}
 
-        flags_accelsearch_cpu = "-ncpus 10 -numharm 8"
+        flags_accelsearch_cpu = "-ncpus 1 -numharm 8"
         flags_accelsearch_gpu = "-cuda %d -numharm 8" % (gpu_id)
 
         
@@ -497,12 +505,30 @@ array_times_GPU = np.zeros(len(list_zmax))
 array_times_CPU = np.zeros(len(list_zmax))
 
 
+
+with open(report_filename, "w") as f:
+    f.write("PSRBENCH version: %s\n" % string_version_full)
+    f.write("Start date and time: %s\n" % start_datetime_str)
+    f.write("Data file: %s\n" % datfile_abspath)
+    
+    f.write("\n")
+    f.write("%s\n" % str_plot_title)
+    
+
+
 ##########################################################################################
 if flag_test_CPU == 1:
         print("***********************************************************************")
         print("           CPU BENCHMARK (%s)                    " % (cpu_model_name))
         print("***********************************************************************")
 
+        with open(report_filename, "a") as f:
+            f.write("\n")
+            f.write("**************************************************\n")
+            f.write("CPU benchmark\n")
+            f.write("Flags: %s\n" % flags_accelsearch_cpu)
+            f.write("\n")
+            f.write("%15s %20s\n" % ("zmax", "Time taken (s)"))
         dict_test_results['CPU'] = 0
 
         for k in range(len(list_zmax)):
@@ -516,6 +542,10 @@ if flag_test_CPU == 1:
                 elif time_taken_accelsearch_s > 0:
                         print("done in %.2f s!" % (time_taken_accelsearch_s)); sys.stdout.flush()
                         array_times_CPU[k] = time_taken_accelsearch_s
+
+                with open(report_filename, "a") as f:
+                        f.write("%15d %20.2f\n" % (zmax, time_taken_accelsearch_s))
+
         dict_test_results['CPU'] = array_times_CPU
         
         
@@ -530,6 +560,15 @@ if flag_test_GPU == 1:
         print("***********************************************************************")
         print("           GPU BENCHMARK (%s)                    " % (gpu_model_name))
         print("***********************************************************************")
+
+        with open(report_filename, "a") as f:
+            f.write("\n")
+            f.write("**************************************************\n")
+            f.write("GPU benchmark\n")
+            f.write("Flags: %s\n" % flags_accelsearch_gpu)
+            f.write("\n")
+            f.write("%15s %20s\n" % ("zmax", "Time taken (s)"))
+
         dict_test_results['GPU'] = 0
         for k in range(len(list_zmax)):
                 zmax = list_zmax[k]
@@ -542,11 +581,10 @@ if flag_test_GPU == 1:
                 elif time_taken_accelsearch_s > 0:
                         print("done in %.2f s!" % (time_taken_accelsearch_s)); sys.stdout.flush()
                         array_times_GPU[k] = time_taken_accelsearch_s
+                with open(report_filename, "a") as f:
+                        f.write("%15d %20.2f\n" % (zmax, time_taken_accelsearch_s))
+                        
         dict_test_results['GPU'] = array_times_GPU
-
-
-
-
 
 
 
@@ -569,7 +607,7 @@ ax.set_xlabel("zmax")
 ax.set_title(str_plot_title)
 ax.set_xticks(x + width, list_zmax)
 ax.legend(loc='upper left')
-plt.savefig("psrbench_histogram_%s.png" % start_datetime_str)
+plt.savefig("psrbench_%s_histogram.png" % start_datetime_str)
 if flag_showplot == 1:
     plt.show()
 
