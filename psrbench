@@ -290,8 +290,8 @@ start_datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 server        = "http://pulsar.oa-cagliari.inaf.it"
 webloc        = "http://pulsar.oa-cagliari.inaf.it/pulsar_data"
-dat_filename  = "ts_47TucE_47T061_3.dat"
-inf_filename  = "ts_47TucE_47T061_3.inf"
+dat_filename  = "pulsar_223Hz_44h_orbit_T0_256deg.dat"
+inf_filename  = "pulsar_223Hz_44h_orbit_T0_256deg.inf"
 dir_psrbench  = os.path.abspath( os.path.dirname( __file__ ) )
 
 work_dir = os.getcwd()
